@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://example.com/schemas/schedule.schema.json",
+  "$id": "https://github.com/yourorg/remote-battery-control-system/schemas/schedule.schema.json",
   "title": "Battery Schedule Message",
   "description": "Schema for daily battery schedule messages published by cloud service to edge devices",
   "type": "object",
@@ -10,13 +10,13 @@
       "type": "string",
       "description": "Unique identifier for this schedule. Typically date-based (e.g., '2024-01-15') to enable idempotent retries. Cloud can safely republish the same schedule_id without devices applying it twice.",
       "pattern": "^[a-zA-Z0-9_-]+$",
-      "examples": ["2024-01-15", "2024-01-15-device-12345"]
+      "examples": ["2025-12-25", "2025-12-25-device-001"]
     },
     "device_id": {
       "type": "string",
       "description": "Target device identifier. Used for topic routing (devices/{device_id}/schedule) and device-side validation. Enables per-device scheduling and debugging.",
       "pattern": "^[a-zA-Z0-9_-]+$",
-      "examples": ["raspberry-pi-001", "device-12345"]
+      "examples": ["device-001", "device-12345"]
     },
     "version": {
       "type": "string",
@@ -53,7 +53,7 @@
       "type": "string",
       "format": "date-time",
       "description": "ISO 8601 timestamp when the cloud service generated this schedule. Used for observability, debugging, and detecting stale schedules. Devices can reject schedules that are too old.",
-      "examples": ["2024-01-15T00:00:00Z", "2024-01-15T12:30:45+00:00"]
+      "examples": ["2025-12-25T00:00:00Z", "2025-12-25T12:30:45+00:00"]
     }
   },
   "additionalProperties": false,

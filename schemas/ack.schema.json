@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://example.com/schemas/ack.schema.json",
+  "$id": "https://github.com/yourorg/remote-battery-control-system/schemas/ack.schema.json",
   "title": "Device Acknowledgement Message",
   "description": "Schema for acknowledgement messages published by edge devices back to cloud service",
   "type": "object",
@@ -10,13 +10,13 @@
       "type": "string",
       "description": "The schedule_id from the received schedule message. Enables cloud to correlate acknowledgements with published schedules for traceability.",
       "pattern": "^[a-zA-Z0-9_-]+$",
-      "examples": ["2024-01-15", "2024-01-15-device-12345"]
+      "examples": ["2025-12-25", "2025-12-25-device-001"]
     },
     "device_id": {
       "type": "string",
       "description": "Device identifier. Used for topic routing and cloud-side aggregation. Enables per-device monitoring and debugging.",
       "pattern": "^[a-zA-Z0-9_-]+$",
-      "examples": ["raspberry-pi-001", "device-12345"]
+      "examples": ["device-001", "device-12345"]
     },
     "status": {
       "type": "string",
@@ -27,12 +27,13 @@
     "timestamp": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 timestamp when the device generated this acknowledgement. Used for latency tracking (issued_at to timestamp), debugging timing issues, and operational monitoring.",
-      "examples": ["2024-01-15T00:05:30Z", "2024-01-15T12:35:45+00:00"]
+      "description": "ISO 8601 timestamp when the device generated this acknowledgement. Used for latency tracking: compare with issued_at from the original schedule message to measure end-to-end system responsiveness. Also supports debugging timing issues and operational monitoring.",
+      "examples": ["2025-12-25T00:05:30Z", "2025-12-25T12:35:45+00:00"]
     },
     "error_reason": {
       "type": "string",
       "description": "Optional error message when status is FAILED. Provides context for debugging: validation failures, version mismatches, device errors, etc. Only present when status=FAILED.",
+      "maxLength": 256,
       "examples": [
         "Unknown schema version: 3.0",
         "Invalid power_kw value: 75.0 exceeds device maximum",
