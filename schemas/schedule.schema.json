@@ -52,7 +52,7 @@
           },
           "rate_kw": {
             "type": "number",
-            "description": "Power rate in kilowatts. Positive values indicate charging, negative values indicate discharging, zero indicates idle. Matches PDF field name 'rate_kw'. Range must match device specifications (e.g., MAX300 capabilities). Devices must reject schedules with rate_kw outside allowed range.",
+            "description": "Power rate in kilowatts. Positive values indicate charging, negative values indicate discharging, zero indicates idle. Matches PDF field name 'rate_kw'. Range must match device specifications. Devices must reject schedules with rate_kw outside allowed range.",
             "minimum": -50,
             "maximum": 50,
             "examples": [100, -50, 10.5, 0.0]
@@ -83,7 +83,7 @@
       "rate_kw matches PDF field name (was power_kw in earlier version)",
       "rate_kw encodes mode via sign (positive=charge, negative=discharge, zero=idle) rather than explicit mode field for cleaner design",
       "optional mode field added for traceability in dashboards and symmetry with original PDF design; rate_kw sign remains source of truth",
-      "rate_kw range (-50 to 50) is example; must match actual device specifications (e.g., MAX300 max power ratings)",
+      "rate_kw range (-50 to 50) is example; must match actual device specifications (e.g., device max power ratings)",
       "optional max_power_kw field enables device-specific edge validation for different device models",
       "devices must reject schedules with rate_kw values outside allowed range (edge validation requirement)",
       "generated_at matches PDF field name (was issued_at in earlier version)",

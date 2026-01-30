@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This repository is a companion implementation reference for a system design exercise.. It demonstrates the message schemas, component boundaries, and communication flows for a distributed battery control system that manages Allye MAX300 devices via MQTT.
+This repository is a companion implementation reference for a system design exercise.. It demonstrates the message schemas, component boundaries, and communication flows for a distributed battery control system that manages battery management devices via MQTT.
 
 **Note**: This code is illustrative and exists to show implementation intent and support architectural discussions.
 
@@ -25,7 +25,8 @@ A cloud service publishes daily battery schedules to edge devices (Raspberry Pi)
 │   └── message-flow.png
 ├── schemas/                     # JSON message schemas
 │   ├── schedule.schema.json     # Battery schedule message format
-│   └── ack.schema.json         # Device acknowledgement format
+│   ├── ack.schema.json         # Device acknowledgement format
+│   └── execution_result.schema.json  # Per-interval execution result format
 ├── cloud/                       # Cloud-side examples
 │   └── publish_schedule.py     # Example schedule publisher
 ├── device/                      # Device-side examples
@@ -40,8 +41,11 @@ A cloud service publishes daily battery schedules to edge devices (Raspberry Pi)
 1. **Cloud publishes schedule**: The cloud service publishes a daily battery schedule to a device-specific MQTT topic
 2. **Device subscribes**: Each device subscribes to its own topic (e.g., `devices/{device_id}/schedule`)
 3. **Device validates**: The device validates the schedule schema and version
-4. **Device applies**: If valid, the device applies the schedule locally
+4. **Device applies**: If valid, the device applies the schedule locally and stores it for execution
 5. **Device acknowledges**: The device publishes an acknowledgement message back to the cloud
+6. **Device executes**: Device executes intervals independently based on system time
+7. **Device reports**: Device publishes execution results every 30 minutes at interval end
+8. **Cloud monitors**: Cloud receives execution results for observability and optimization
 
 ### Component Responsibilities
 
@@ -55,7 +59,10 @@ A cloud service publishes daily battery schedules to edge devices (Raspberry Pi)
 - Subscribes to device-specific MQTT topics
 - Validates incoming schedules (schema + version)
 - Applies schedules safely (rejects unknown versions)
+- Stores schedules locally for independent execution
 - Publishes acknowledgements for traceability
+- Executes intervals independently based on system time
+- Publishes execution results every 30 minutes
 - Handles reconnection and retry logic
 
 ## Design Principles
@@ -65,6 +72,8 @@ A cloud service publishes daily battery schedules to edge devices (Raspberry Pi)
 - **Structured logging**: Timestamps and trace IDs in all messages
 - **Acknowledgement tracking**: Cloud correlates schedules with device responses
 - **Status reporting**: RECEIVED, APPLIED, or FAILED status per device
+- **Per-interval execution results**: Devices report execution status every 30 minutes
+- **Actual vs scheduled comparison**: Execution results include actual_rate_kw for optimization
 - **Error context**: Failed operations include error reasons
 
 ### Scalability
@@ -108,9 +117,10 @@ This demonstrates the full message flow in a single script.
 ### Message Format Notes
 
 **Power and Mode Fields:**
-- `power_kw` is the **source of truth** for battery operation (positive=charge, negative=discharge, zero=idle)
+- `rate_kw` is the **source of truth** for battery operation (positive=charge, negative=discharge, zero=idle)
+- Matches PDF field name `rate_kw` (was `power_kw` in earlier version)
 - Optional `mode` field exists for dashboard visualization and traceability only
-- Devices derive mode from `power_kw` sign; explicit `mode` is ignored during validation
+- Devices derive mode from `rate_kw` sign; explicit `mode` is ignored during validation
 
 **Device-Specific Limits:**
 - Optional `max_power_kw` field enables device-specific edge validation

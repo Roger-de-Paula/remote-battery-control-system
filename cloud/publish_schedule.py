@@ -40,12 +40,12 @@ def get_device_capabilities(device_id: str) -> Dict[str, Any]:
     - Handle device not found errors
     
     Returns:
-        Dict with device capabilities (e.g., {"max_power_kw": 50.0, "model": "MAX300"})
+        Dict with device capabilities (e.g., {"max_power_kw": 50.0, "model": "BatteryController"})
     """
     # Mock: In production, query device registry
     # device = device_registry.get(device_id)
     # return {"max_power_kw": device.max_power_kw, "model": device.model}
-    return {"max_power_kw": 50.0, "model": "MAX300"}
+    return {"max_power_kw": 50.0, "model": "BatteryController"}
 
 
 def generate_schedule(device_id: str, date: str, max_power_kw: float = 50.0) -> Dict[str, Any]:

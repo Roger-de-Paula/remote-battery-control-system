@@ -16,7 +16,7 @@
       "type": "string",
       "description": "Device identifier. Used for topic routing and cloud-side aggregation. Enables per-device execution monitoring and debugging.",
       "pattern": "^[a-zA-Z0-9_-]+$",
-      "examples": ["device-001", "max300-123"]
+      "examples": ["device-001", "battery-controller-123"]
     },
     "interval": {
       "type": "object",
