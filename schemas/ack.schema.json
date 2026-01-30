@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/schemas/ack.schema.json",
+  "title": "Device Acknowledgement Message",
+  "description": "Schema for acknowledgement messages published by edge devices back to cloud service",
+  "type": "object",
+  "required": ["schedule_id", "device_id", "status", "timestamp"],
+  "properties": {
+    "schedule_id": {
+      "type": "string",
+      "description": "The schedule_id from the received schedule message. Enables cloud to correlate acknowledgements with published schedules for traceability.",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "examples": ["2024-01-15", "2024-01-15-device-12345"]
+    },
+    "device_id": {
+      "type": "string",
+      "description": "Device identifier. Used for topic routing and cloud-side aggregation. Enables per-device monitoring and debugging.",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "examples": ["raspberry-pi-001", "device-12345"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["RECEIVED", "APPLIED", "FAILED"],
+      "description": "Processing status of the schedule. RECEIVED: message received and validated. APPLIED: schedule successfully applied to device. FAILED: schedule could not be applied (see error_reason). This enum supports operational visibility: cloud can track success rates, identify failing devices, and trigger alerts.",
+      "examples": ["RECEIVED", "APPLIED", "FAILED"]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the device generated this acknowledgement. Used for latency tracking (issued_at to timestamp), debugging timing issues, and operational monitoring.",
+      "examples": ["2024-01-15T00:05:30Z", "2024-01-15T12:35:45+00:00"]
+    },
+    "error_reason": {
+      "type": "string",
+      "description": "Optional error message when status is FAILED. Provides context for debugging: validation failures, version mismatches, device errors, etc. Only present when status=FAILED.",
+      "examples": [
+        "Unknown schema version: 3.0",
+        "Invalid power_kw value: 75.0 exceeds device maximum",
+        "Device hardware error: battery controller unavailable"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "comments": {
+    "design_decisions": [
+      "status enum provides clear operational states: cloud can build dashboards and alerts on these values",
+      "error_reason is optional to keep successful acknowledgements lightweight while providing debugging context for failures",
+      "schedule_id correlation enables end-to-end traceability: cloud can track schedule lifecycle from publish to application",
+      "timestamp enables latency analysis: compare issued_at (schedule) vs timestamp (ack) to measure system responsiveness",
+      "device_id supports aggregation: cloud can group acknowledgements by device for monitoring and alerting",
+      "additionalProperties: false ensures strict validation and prevents accidental field additions that might break cloud parsers"
+    ],
+    "observability_support": [
+      "Traceability: schedule_id links publish → ack for end-to-end request tracking",
+      "Debugging: error_reason provides actionable context when schedules fail",
+      "Operational visibility: status enum enables success rate monitoring and alerting",
+      "Latency tracking: timestamp vs issued_at enables performance analysis",
+      "Device health: cloud can aggregate by device_id to identify problematic devices"
+    ]
+  }
+}
+

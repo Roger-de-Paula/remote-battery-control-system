@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/schemas/schedule.schema.json",
+  "title": "Battery Schedule Message",
+  "description": "Schema for daily battery schedule messages published by cloud service to edge devices",
+  "type": "object",
+  "required": ["schedule_id", "device_id", "version", "intervals", "issued_at"],
+  "properties": {
+    "schedule_id": {
+      "type": "string",
+      "description": "Unique identifier for this schedule. Typically date-based (e.g., '2024-01-15') to enable idempotent retries. Cloud can safely republish the same schedule_id without devices applying it twice.",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "examples": ["2024-01-15", "2024-01-15-device-12345"]
+    },
+    "device_id": {
+      "type": "string",
+      "description": "Target device identifier. Used for topic routing (devices/{device_id}/schedule) and device-side validation. Enables per-device scheduling and debugging.",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "examples": ["raspberry-pi-001", "device-12345"]
+    },
+    "version": {
+      "type": "string",
+      "description": "Schema version (e.g., '1.0', '2.1'). Critical for protocol evolution: devices reject unknown versions to prevent applying incompatible schedules. Supports backward compatibility and gradual rollouts.",
+      "pattern": "^\\d+\\.\\d+$",
+      "examples": ["1.0", "2.1"]
+    },
+    "intervals": {
+      "type": "array",
+      "description": "Array of half-hour time slots defining power setpoints throughout the day. Each interval represents 30 minutes of battery operation.",
+      "minItems": 1,
+      "maxItems": 48,
+      "items": {
+        "type": "object",
+        "required": ["start_time", "power_kw"],
+        "properties": {
+          "start_time": {
+            "type": "string",
+            "description": "ISO 8601 time string for the start of this interval (HH:MM:SS format). Represents the beginning of a 30-minute slot.",
+            "pattern": "^\\d{2}:\\d{2}:\\d{2}$",
+            "examples": ["00:00:00", "12:30:00", "23:30:00"]
+          },
+          "power_kw": {
+            "type": "number",
+            "description": "Power setpoint in kilowatts. Positive values indicate charging, negative values indicate discharging. Must be within device capabilities.",
+            "minimum": -50,
+            "maximum": 50,
+            "examples": [5.0, -10.5, 0.0]
+          }
+        }
+      }
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the cloud service generated this schedule. Used for observability, debugging, and detecting stale schedules. Devices can reject schedules that are too old.",
+      "examples": ["2024-01-15T00:00:00Z", "2024-01-15T12:30:45+00:00"]
+    }
+  },
+  "additionalProperties": false,
+  "comments": {
+    "design_decisions": [
+      "schedule_id enables idempotency: cloud can safely retry publishes without devices re-applying schedules",
+      "version field supports protocol evolution: devices can reject unknown versions to prevent errors",
+      "intervals array is limited to 48 items (24 hours * 2 slots/hour) to bound message size",
+      "power_kw range (-50 to 50) should match device specifications; adjust per device model",
+      "issued_at supports observability: cloud can track schedule generation time vs application time",
+      "additionalProperties: false ensures strict schema validation and prevents accidental field additions"
+    ]
+  }
+}
+
