@@ -12,7 +12,7 @@ authentication, retry logic, and observability instrumentation.
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict, Any
 
 # In production, use a real MQTT client library (e.g., paho-mqtt)
@@ -67,33 +67,44 @@ def generate_schedule(device_id: str, date: str, max_power_kw: float = 50.0) -> 
     intervals = []
     
     # Generate 48 half-hour intervals (24 hours)
+    # Use full ISO timestamps matching PDF specification
+    schedule_date = date  # e.g., "2025-12-25"
+    
     for hour in range(24):
         for minute in [0, 30]:
-            start_time = f"{hour:02d}:{minute:02d}:00"
-            # Mock logic: charge during off-peak (2-6 AM), discharge during peak (6-9 PM)
-            # Ensure power_kw values respect device limits
-            if 2 <= hour < 6:
-                power_kw = min(10.0, max_power_kw * 0.2)  # Charge during off-peak
-            elif 18 <= hour < 21:
-                power_kw = max(-15.0, -max_power_kw * 0.3)  # Discharge during peak
-            else:
-                power_kw = 0.0  # Idle otherwise
+            # Create full ISO timestamps matching PDF format
+            start_dt = datetime.strptime(f"{schedule_date}T{hour:02d}:{minute:02d}:00", "%Y-%m-%dT%H:%M:%S").replace(tzinfo=UTC)
+            start_iso = start_dt.isoformat().replace('+00:00', 'Z')
             
-            # Derive mode from power_kw sign (for dashboard visualization)
-            mode = "CHARGE" if power_kw > 0 else "DISCHARGE" if power_kw < 0 else "IDLE"
+            # Calculate end time (30 minutes later)
+            end_dt = start_dt + timedelta(minutes=30)
+            end_iso = end_dt.isoformat().replace('+00:00', 'Z')
+            
+            # Mock logic: charge during off-peak (2-6 AM), discharge during peak (6-9 PM)
+            # Ensure rate_kw values respect device limits
+            if 2 <= hour < 6:
+                rate_kw = min(10.0, max_power_kw * 0.2)  # Charge during off-peak
+            elif 18 <= hour < 21:
+                rate_kw = max(-15.0, -max_power_kw * 0.3)  # Discharge during peak
+            else:
+                rate_kw = 0.0  # Idle otherwise
+            
+            # Derive mode from rate_kw sign (for dashboard visualization)
+            mode = "CHARGE" if rate_kw > 0 else "DISCHARGE" if rate_kw < 0 else "IDLE"
             
             intervals.append({
-                "start_time": start_time,
-                "power_kw": power_kw,
-                "mode": mode  # Optional field for dashboard visualization; power_kw is source of truth
+                "start": start_iso,  # Full ISO timestamp matching PDF
+                "end": end_iso,  # Full ISO timestamp matching PDF
+                "rate_kw": rate_kw,  # Matches PDF field name
+                "mode": mode  # Optional field for dashboard visualization; rate_kw is source of truth
             })
     
     schedule = {
         "schedule_id": date,  # Date-based ID enables idempotent retries
         "device_id": device_id,
-        "version": "1.0",  # Schema version for protocol evolution
+        "version": 1,  # Integer version matching PDF specification
         "intervals": intervals,
-        "issued_at": datetime.utcnow().isoformat() + "Z"
+        "generated_at": datetime.now(UTC).isoformat().replace('+00:00', 'Z')  # Matches PDF field name
     }
     
     # Optional: include device-specific power limit for edge validation
@@ -201,7 +212,7 @@ def main():
     - Structured logging: Replace prints with structured logs for observability
     """
     device_id = "device-001"
-    today = datetime.utcnow().date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     
     # Get device capabilities from registry (in production)
     capabilities = get_device_capabilities(device_id)

@@ -12,7 +12,7 @@ configuration management, security, and production-grade MQTT client usage.
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict, Any, Optional, Tuple
 
 # In production, use a real MQTT client library (e.g., paho-mqtt)
@@ -25,7 +25,8 @@ from typing import Dict, Any, Optional, Tuple
 
 
 # Supported schema versions - devices reject unknown versions for safety
-SUPPORTED_VERSIONS = {"1.0", "1.1"}
+# Version is integer matching PDF specification (1, 2, etc.)
+SUPPORTED_VERSIONS = {1, 2}
 
 
 def validate_schedule(schedule: Dict[str, Any]) -> Tuple[bool, Optional[str], Optional[float]]:
@@ -42,7 +43,7 @@ def validate_schedule(schedule: Dict[str, Any]) -> Tuple[bool, Optional[str], Op
     device capabilities.
     """
     # Check required fields
-    required_fields = ["schedule_id", "device_id", "version", "intervals", "issued_at"]
+    required_fields = ["schedule_id", "device_id", "version", "intervals", "generated_at"]
     for field in required_fields:
         if field not in schedule:
             return False, f"Missing required field: {field}", None
@@ -65,24 +66,25 @@ def validate_schedule(schedule: Dict[str, Any]) -> Tuple[bool, Optional[str], Op
     
     # Validate each interval
     for i, interval in enumerate(intervals):
-        if "start_time" not in interval or "power_kw" not in interval:
-            return False, f"Interval {i} missing required fields", max_power_kw
+        # Check required fields matching PDF specification
+        if "start" not in interval or "end" not in interval or "rate_kw" not in interval:
+            return False, f"Interval {i} missing required fields (start, end, rate_kw)", max_power_kw
         
-        power_kw = interval["power_kw"]
-        if not isinstance(power_kw, (int, float)):
-            return False, f"Interval {i}: power_kw must be numeric", max_power_kw
+        rate_kw = interval["rate_kw"]
+        if not isinstance(rate_kw, (int, float)):
+            return False, f"Interval {i}: rate_kw must be numeric", max_power_kw
         
-        # Edge validation: Reject power_kw outside device-specific limits
+        # Edge validation: Reject rate_kw outside device-specific limits
         # This is a critical safety check to prevent hardware damage
-        if abs(power_kw) > max_power_kw:
-            return False, f"Interval {i}: power_kw {power_kw} exceeds device limit (±{max_power_kw} kW)", max_power_kw
+        if abs(rate_kw) > max_power_kw:
+            return False, f"Interval {i}: rate_kw {rate_kw} exceeds device limit (±{max_power_kw} kW)", max_power_kw
         
-        # Validate mode consistency if provided (mode must match power_kw sign)
+        # Validate mode consistency if provided (mode must match rate_kw sign)
         if "mode" in interval:
             mode = interval["mode"]
-            expected_mode = "CHARGE" if power_kw > 0 else "DISCHARGE" if power_kw < 0 else "IDLE"
+            expected_mode = "CHARGE" if rate_kw > 0 else "DISCHARGE" if rate_kw < 0 else "IDLE"
             if mode != expected_mode:
-                return False, f"Interval {i}: mode '{mode}' does not match power_kw sign (expected '{expected_mode}')", max_power_kw
+                return False, f"Interval {i}: mode '{mode}' does not match rate_kw sign (expected '{expected_mode}')", max_power_kw
     
     return True, None, max_power_kw
 
@@ -106,7 +108,7 @@ def apply_schedule(schedule: Dict[str, Any]) -> bool:
     
     # Mock: In production, send commands to battery controller
     # for interval in schedule['intervals']:
-    #     battery_controller.set_power(interval['start_time'], interval['power_kw'])
+    #     battery_controller.set_power(interval['start'], interval['rate_kw'])
     
     # In production, also:
     # - Store schedule to local database/file for persistence
@@ -133,7 +135,7 @@ def create_execution_result(
     
     Args:
         schedule: The schedule dict containing schedule_id and device_id
-        interval: The interval dict with start_time (and optionally end_time)
+        interval: The interval dict with start and end (full ISO timestamps)
         status: Execution status ("SUCCEED" or "FAIL")
         actual_rate_kw: Actual power rate achieved during the interval
         error_reason: Optional error message if status is FAIL
@@ -141,17 +143,17 @@ def create_execution_result(
     Returns:
         Execution result message dict
     """
-    # Derive full ISO timestamps from schedule_id and interval start_time
-    schedule_date = schedule['schedule_id']  # e.g., "2025-12-25"
+    # Use start and end directly from interval (already in ISO format matching PDF)
+    start_iso = interval.get('start')
+    end_iso = interval.get('end')
     
-    # Parse interval start_time (HH:MM:SS format)
-    start_time_str = interval.get('start_time', '00:00:00')
-    start_iso = f"{schedule_date}T{start_time_str}Z"
-    
-    # Calculate end time (30 minutes later)
-    start_dt = datetime.fromisoformat(start_iso.replace('Z', '+00:00'))
-    end_dt = start_dt + timedelta(minutes=30)
-    end_iso = end_dt.isoformat().replace('+00:00', 'Z')
+    if not start_iso or not end_iso:
+        # Fallback: derive from schedule_id if not provided
+        schedule_date = schedule['schedule_id']
+        start_iso = f"{schedule_date}T00:00:00Z"
+        start_dt = datetime.fromisoformat(start_iso.replace('Z', '+00:00'))
+        end_dt = start_dt + timedelta(minutes=30)
+        end_iso = end_dt.isoformat().replace('+00:00', 'Z')
     
     result = {
         "schedule_id": schedule['schedule_id'],
@@ -193,7 +195,7 @@ def publish_execution_result(result: Dict[str, Any], mqtt_client=None) -> None:
     payload = json.dumps(result, indent=None)
     
     print(f"[DEVICE] Publishing execution result to {topic}")
-    print(f"[DEVICE] Interval: {result['interval']['start']} → {result['interval']['end']}")
+    print(f"[DEVICE] Interval: {result['interval']['start']} -> {result['interval']['end']}")
     print(f"[DEVICE] Status: {result['status']}")
     print(f"[DEVICE] Actual rate: {result['actual_rate_kw']} kW")
     
@@ -229,9 +231,9 @@ def execute_interval(schedule: Dict[str, Any], interval: Dict[str, Any]) -> Dict
     Returns:
         Execution result message dict
     """
-    scheduled_rate_kw = interval.get('power_kw', 0.0)
+    scheduled_rate_kw = interval.get('rate_kw', 0.0)
     
-    print(f"[DEVICE] Executing interval: {interval.get('start_time', 'unknown')}")
+    print(f"[DEVICE] Executing interval: {interval.get('start', 'unknown')} -> {interval.get('end', 'unknown')}")
     print(f"[DEVICE] Scheduled rate: {scheduled_rate_kw} kW")
     
     # Mock execution: In production, this would:
@@ -307,7 +309,7 @@ def create_acknowledgement(
         "schedule_id": ack_schedule_id,
         "device_id": ack_device_id,
         "status": status,
-        "timestamp": datetime.utcnow().isoformat() + "Z"
+        "timestamp": datetime.now(UTC).isoformat().replace('+00:00', 'Z')
     }
     
     if status == "FAILED" and error_reason:
@@ -315,7 +317,7 @@ def create_acknowledgement(
     
     # Include applied_at timestamp for APPLIED status (granular timing for latency analysis)
     if status == "APPLIED" and applied_at:
-        ack["applied_at"] = applied_at.isoformat() + "Z"
+        ack["applied_at"] = applied_at.isoformat().replace('+00:00', 'Z')
     
     # Include max_power_kw_applied for traceability (helps cloud understand validation context)
     if max_power_kw_applied is not None:
@@ -423,7 +425,7 @@ def on_schedule_received(topic: str, payload: bytes, device_id: str) -> None:
     
     # Apply schedule to hardware
     try:
-        applied_at = datetime.utcnow()  # Capture timestamp before applying
+        applied_at = datetime.now(UTC)  # Capture timestamp before applying
         success = apply_schedule(schedule)
         
         if success:

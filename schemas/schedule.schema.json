@@ -4,7 +4,7 @@
   "title": "Battery Schedule Message",
   "description": "Schema for daily battery schedule messages published by cloud service to edge devices",
   "type": "object",
-  "required": ["schedule_id", "device_id", "version", "intervals", "issued_at"],
+  "required": ["schedule_id", "device_id", "version", "intervals", "generated_at"],
   "properties": {
     "schedule_id": {
       "type": "string",
@@ -20,15 +20,14 @@
     },
     "max_power_kw": {
       "type": "number",
-      "description": "Optional device-specific maximum power limit in kilowatts. If provided, devices validate that all interval power_kw values are within ±max_power_kw. Enables edge validation for different device models with varying capabilities.",
+      "description": "Optional device-specific maximum power limit in kilowatts. If provided, devices validate that all interval rate_kw values are within ±max_power_kw. Enables edge validation for different device models with varying capabilities.",
       "minimum": 0,
       "examples": [50, 30, 100]
     },
     "version": {
-      "type": "string",
-      "description": "Schema version (e.g., '1.0', '2.1'). Critical for protocol evolution: devices reject unknown versions to prevent applying incompatible schedules. Supports backward compatibility and gradual rollouts.",
-      "pattern": "^\\d+\\.\\d+$",
-      "examples": ["1.0", "2.1"]
+      "type": "integer",
+      "description": "Schema version (e.g., 1, 2). Critical for protocol evolution: devices reject unknown versions to prevent applying incompatible schedules. Supports backward compatibility and gradual rollouts. Matches PDF specification.",
+      "examples": [1, 2]
     },
     "intervals": {
       "type": "array",
@@ -37,35 +36,41 @@
       "maxItems": 48,
       "items": {
         "type": "object",
-        "required": ["start_time", "power_kw"],
+        "required": ["start", "end", "rate_kw"],
         "properties": {
-          "start_time": {
+          "start": {
             "type": "string",
-            "description": "Time string for the start of this interval (HH:MM:SS format). The device derives the full date from schedule_id, so only time is needed. This avoids redundant date information in each interval.",
-            "pattern": "^\\d{2}:\\d{2}:\\d{2}$",
-            "examples": ["00:00:00", "12:30:00", "23:30:00"]
+            "format": "date-time",
+            "description": "ISO 8601 timestamp for the start of this interval. Full timestamp format matching PDF specification (e.g., '2025-12-25T00:00:00Z').",
+            "examples": ["2025-12-25T00:00:00Z", "2025-12-25T12:30:00Z"]
           },
-          "power_kw": {
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp for the end of this interval. Typically start + 30 minutes for half-hour intervals. Matches PDF specification.",
+            "examples": ["2025-12-25T00:30:00Z", "2025-12-25T13:00:00Z"]
+          },
+          "rate_kw": {
             "type": "number",
-            "description": "Power setpoint in kilowatts. Positive values indicate charging, negative values indicate discharging, zero indicates idle. The sign encodes the mode (cleaner than separate mode field). Range must match device specifications (e.g., MAX300 capabilities). Devices must reject schedules with power_kw outside allowed range.",
+            "description": "Power rate in kilowatts. Positive values indicate charging, negative values indicate discharging, zero indicates idle. Matches PDF field name 'rate_kw'. Range must match device specifications (e.g., MAX300 capabilities). Devices must reject schedules with rate_kw outside allowed range.",
             "minimum": -50,
             "maximum": 50,
-            "examples": [5.0, -10.5, 0.0]
+            "examples": [100, -50, 10.5, 0.0]
           },
           "mode": {
             "type": "string",
             "enum": ["CHARGE", "DISCHARGE", "IDLE"],
-            "description": "Optional explicit mode field for traceability in dashboards. If omitted, mode is derived from power_kw sign (positive=CHARGE, negative=DISCHARGE, zero=IDLE). Provided for symmetry with original PDF design; power_kw sign is the source of truth.",
+            "description": "Optional explicit mode field for traceability in dashboards. If omitted, mode is derived from rate_kw sign (positive=CHARGE, negative=DISCHARGE, zero=IDLE). Provided for symmetry with original PDF design; rate_kw sign is the source of truth.",
             "examples": ["CHARGE", "DISCHARGE", "IDLE"]
           }
         }
       }
     },
-    "issued_at": {
+    "generated_at": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 timestamp when the cloud service generated this schedule. Used for observability, debugging, and detecting stale schedules. Devices can reject schedules that are too old.",
-      "examples": ["2025-12-25T00:00:00Z", "2025-12-25T12:30:45+00:00"]
+      "description": "ISO 8601 timestamp when the cloud service generated this schedule. Matches PDF field name 'generated_at'. Used for observability, debugging, and detecting stale schedules. Devices can reject schedules that are too old.",
+      "examples": ["2025-12-24T12:00:00Z", "2025-12-25T12:30:45+00:00"]
     }
   },
   "additionalProperties": false,
@@ -74,13 +79,15 @@
       "schedule_id enables idempotency: cloud can safely retry publishes without devices re-applying schedules",
       "version field supports protocol evolution: devices can reject unknown versions to prevent errors",
       "intervals array is limited to 48 items (24 hours * 2 slots/hour) to bound message size",
-      "start_time uses HH:MM:SS format since device knows the date from schedule_id, avoiding redundant full timestamps",
-      "power_kw encodes mode via sign (positive=charge, negative=discharge, zero=idle) rather than explicit mode field for cleaner design",
-      "optional mode field added for traceability in dashboards and symmetry with original PDF design; power_kw sign remains source of truth",
-      "power_kw range (-50 to 50) is example; must match actual device specifications (e.g., MAX300 max power ratings)",
+      "start and end use full ISO 8601 timestamps matching PDF specification for clarity and precision",
+      "rate_kw matches PDF field name (was power_kw in earlier version)",
+      "rate_kw encodes mode via sign (positive=charge, negative=discharge, zero=idle) rather than explicit mode field for cleaner design",
+      "optional mode field added for traceability in dashboards and symmetry with original PDF design; rate_kw sign remains source of truth",
+      "rate_kw range (-50 to 50) is example; must match actual device specifications (e.g., MAX300 max power ratings)",
       "optional max_power_kw field enables device-specific edge validation for different device models",
-      "devices must reject schedules with power_kw values outside allowed range (edge validation requirement)",
-      "issued_at supports observability: cloud can track schedule generation time vs application time",
+      "devices must reject schedules with rate_kw values outside allowed range (edge validation requirement)",
+      "generated_at matches PDF field name (was issued_at in earlier version)",
+      "generated_at supports observability: cloud can track schedule generation time vs application time",
       "additionalProperties: false ensures strict schema validation and prevents accidental field additions"
     ]
   }

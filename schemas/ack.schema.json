@@ -27,13 +27,13 @@
     "timestamp": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 timestamp when the device generated this acknowledgement. Used for latency tracking: compare with issued_at from the original schedule message to measure end-to-end system responsiveness. Also supports debugging timing issues and operational monitoring.",
+      "description": "ISO 8601 timestamp when the device generated this acknowledgement. Used for latency tracking: compare with generated_at from the original schedule message to measure end-to-end system responsiveness. Also supports debugging timing issues and operational monitoring.",
       "examples": ["2025-12-25T00:05:30Z", "2025-12-25T12:35:45+00:00"]
     },
     "applied_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Optional ISO 8601 timestamp when the schedule was actually applied to device hardware (only present when status=APPLIED). Provides granular timing for latency analysis: compare issued_at (schedule generation) → applied_at (hardware application) → timestamp (ack generation).",
+      "description": "Optional ISO 8601 timestamp when the schedule was actually applied to device hardware (only present when status=APPLIED). Provides granular timing for latency analysis: compare generated_at (schedule generation) → applied_at (hardware application) → timestamp (ack generation).",
       "examples": ["2025-12-25T00:05:25Z", "2025-12-25T12:35:40+00:00"]
     },
     "error_reason": {
@@ -42,7 +42,7 @@
       "maxLength": 256,
       "examples": [
         "Unknown schema version: 3.0",
-        "Invalid power_kw value: 75.0 exceeds device maximum",
+        "Invalid rate_kw value: 75.0 exceeds device maximum",
         "Device hardware error: battery controller unavailable"
       ]
     }
@@ -53,7 +53,7 @@
       "status enum provides clear operational states: cloud can build dashboards and alerts on these values",
       "error_reason is optional to keep successful acknowledgements lightweight while providing debugging context for failures",
       "schedule_id correlation enables end-to-end traceability: cloud can track schedule lifecycle from publish to application",
-      "timestamp enables latency analysis: compare issued_at (schedule) vs timestamp (ack) to measure system responsiveness",
+      "timestamp enables latency analysis: compare generated_at (schedule) vs timestamp (ack) to measure system responsiveness",
       "device_id supports aggregation: cloud can group acknowledgements by device for monitoring and alerting",
       "additionalProperties: false ensures strict validation and prevents accidental field additions that might break cloud parsers"
     ],
@@ -61,7 +61,7 @@
       "Traceability: schedule_id links publish → ack for end-to-end request tracking",
       "Debugging: error_reason provides actionable context when schedules fail",
       "Operational visibility: status enum enables success rate monitoring and alerting",
-      "Latency tracking: timestamp vs issued_at enables performance analysis",
+      "Latency tracking: timestamp vs generated_at enables performance analysis",
       "Device health: cloud can aggregate by device_id to identify problematic devices"
     ]
   }

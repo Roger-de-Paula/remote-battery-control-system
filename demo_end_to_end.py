@@ -13,7 +13,7 @@ This is illustrative code showing the complete workflow in a single script.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any, Optional, List
 
 # Import cloud and device functions
@@ -112,7 +112,7 @@ def simulate_end_to_end_flow(device_id: str = "device-001", use_mock_mqtt: bool 
     # Step 1: Cloud generates schedule
     print("[STEP 1] Cloud: Generating schedule")
     print("-" * 70)
-    today = datetime.utcnow().date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     
     # Get device capabilities from registry
     capabilities = get_device_capabilities(device_id)
@@ -163,7 +163,7 @@ def simulate_end_to_end_flow(device_id: str = "device-001", use_mock_mqtt: bool 
     is_valid, error_reason, max_power_kw_applied = validate_schedule(schedule)
     
     if not is_valid:
-        print(f"  ❌ Validation FAILED: {error_reason}")
+        print(f"  [FAIL] Validation FAILED: {error_reason}")
         print()
         print("[STEP 5] Device: Sending FAILED acknowledgement")
         print("-" * 70)
@@ -184,7 +184,7 @@ def simulate_end_to_end_flow(device_id: str = "device-001", use_mock_mqtt: bool 
         print(f"  Timestamp: {ack['timestamp']}")
         return
     
-    print(f"  ✅ Validation PASSED")
+    print(f"  [OK] Validation PASSED")
     print(f"  Max power limit applied: {max_power_kw_applied} kW")
     print()
     
@@ -194,11 +194,11 @@ def simulate_end_to_end_flow(device_id: str = "device-001", use_mock_mqtt: bool 
     success = apply_schedule(schedule)
     
     if not success:
-        print("  ❌ Hardware application FAILED")
+        print("  [FAIL] Hardware application FAILED")
         ack_status = "FAILED"
         error_reason = "Hardware application failed"
     else:
-        print("  ✅ Schedule applied successfully")
+        print("  [OK] Schedule applied successfully")
         ack_status = "APPLIED"
         error_reason = None
     print()
@@ -206,7 +206,7 @@ def simulate_end_to_end_flow(device_id: str = "device-001", use_mock_mqtt: bool 
     # Step 6: Device sends acknowledgement
     print(f"[STEP 6] Device: Sending {ack_status} acknowledgement")
     print("-" * 70)
-    applied_at = datetime.utcnow() if ack_status == "APPLIED" else None
+    applied_at = datetime.now(UTC) if ack_status == "APPLIED" else None
     ack = create_acknowledgement(
         schedule,
         ack_status,
@@ -237,15 +237,56 @@ def simulate_end_to_end_flow(device_id: str = "device-001", use_mock_mqtt: bool 
     if ack.get('applied_at'):
         print(f"  Applied at: {ack['applied_at']}")
         # Calculate latency
-        issued_at = datetime.fromisoformat(schedule['issued_at'].replace('Z', '+00:00'))
-        applied_at_dt = datetime.fromisoformat(ack['applied_at'].replace('Z', '+00:00'))
-        latency_ms = (applied_at_dt - issued_at).total_seconds() * 1000
-        print(f"  Latency (issued_at → applied_at): {latency_ms:.0f} ms")
+        # Parse timestamps - handle both Z and +00:00 formats
+        gen_str = schedule['generated_at']
+        if gen_str.endswith('Z'):
+            gen_str = gen_str[:-1] + '+00:00'  # Remove Z and add +00:00
+        elif '+' not in gen_str:
+            gen_str = gen_str + '+00:00'
+        
+        app_str = ack['applied_at']
+        if app_str.endswith('Z'):
+            app_str = app_str[:-1] + '+00:00'  # Remove Z and add +00:00
+        elif '+' not in app_str:
+            app_str = app_str + '+00:00'
+        
+        generated_at = datetime.fromisoformat(gen_str)
+        applied_at_dt = datetime.fromisoformat(app_str)
+        latency_ms = (applied_at_dt - generated_at).total_seconds() * 1000
+        print(f"  Latency (generated_at -> applied_at): {latency_ms:.0f} ms")
     if ack.get('max_power_kw_applied'):
         print(f"  Max power limit: {ack['max_power_kw_applied']} kW")
     if ack.get('error_reason'):
         print(f"  Error reason: {ack['error_reason']}")
     print()
+    
+    # Step 8: Device executes intervals and reports results (every 30 minutes)
+    print("[STEP 8] Device: Executing intervals and reporting results")
+    print("-" * 70)
+    print("  (In production, device executes intervals independently based on system time)")
+    print("  (Reporting execution results every 30 minutes at interval end)")
+    print()
+    
+    # Simulate execution of first few intervals
+    execution_results = []
+    for i, interval in enumerate(schedule['intervals'][:3]):  # Show first 3 intervals
+        print(f"  Executing interval {i+1}: {interval.get('start', 'unknown')} -> {interval.get('end', 'unknown')}")
+        result = execute_interval(schedule, interval)
+        execution_results.append(result)
+        publish_execution_result(result)
+        print()
+    
+    # Step 9: Cloud receives execution results
+    print("[STEP 9] Cloud: Received execution results")
+    print("-" * 70)
+    for result in execution_results:
+        print(f"  Schedule: {result['schedule_id']}")
+        print(f"  Interval: {result['interval']['start']} -> {result['interval']['end']}")
+        print(f"  Status: {result['status']}")
+        print(f"  Actual rate: {result['actual_rate_kw']:.2f} kW")
+        if result.get('error_reason'):
+            print(f"  Error: {result['error_reason']}")
+        print()
     
     # Summary
     print("=" * 70)
@@ -253,12 +294,14 @@ def simulate_end_to_end_flow(device_id: str = "device-001", use_mock_mqtt: bool 
     print("=" * 70)
     print()
     print("Key points demonstrated:")
-    print("  ✅ Idempotency: schedule_id enables safe retries")
-    print("  ✅ Edge validation: device validates power limits")
-    print("  ✅ Traceability: ack links back to schedule via schedule_id")
-    print("  ✅ Observability: max_power_kw_applied in ack for monitoring")
-    print("  ✅ Granular timing: applied_at timestamp for latency analysis")
-    print("  ✅ Safety: version checking prevents incompatible schedules")
+    print("  [OK] Idempotency: schedule_id enables safe retries")
+    print("  [OK] Edge validation: device validates power limits")
+    print("  [OK] Traceability: ack links back to schedule via schedule_id")
+    print("  [OK] Observability: max_power_kw_applied in ack for monitoring")
+    print("  [OK] Granular timing: applied_at timestamp for latency analysis")
+    print("  [OK] Per-interval reporting: execution results every 30 minutes")
+    print("  [OK] Actual vs scheduled: execution results report real-world performance")
+    print("  [OK] Safety: version checking prevents incompatible schedules")
     print()
     
     # Return metrics for summary table
@@ -283,9 +326,9 @@ def simulate_validation_failure() -> None:
     # Create invalid schedule (missing required field)
     invalid_schedule = {
         "device_id": device_id,
-        "version": "1.0",
-        "intervals": [{"start_time": "00:00:00", "power_kw": 10.0}],
-        "issued_at": datetime.utcnow().isoformat() + "Z"
+        "version": 1,
+        "intervals": [{"start": "2025-12-25T00:00:00Z", "end": "2025-12-25T00:30:00Z", "rate_kw": 10.0}],
+        "generated_at": datetime.now(UTC).isoformat().replace('+00:00', 'Z')
         # Missing schedule_id
     }
     
@@ -300,7 +343,7 @@ def simulate_validation_failure() -> None:
     print("[DEVICE] Validating schedule")
     print("-" * 70)
     is_valid, error_reason, max_power_kw_applied = validate_schedule(invalid_schedule)
-    print(f"  ❌ Validation FAILED: {error_reason}")
+    print(f"  [FAIL] Validation FAILED: {error_reason}")
     print()
     
     print("[DEVICE] Sending FAILED acknowledgement")
