@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/yourorg/remote-battery-control-system/schemas/ack.schema.json",
+  "$id": "https://github.com/remote-battery-control-system/schemas/ack.schema.json",
   "title": "Device Acknowledgement Message",
   "description": "Schema for acknowledgement messages published by edge devices back to cloud service",
   "type": "object",
