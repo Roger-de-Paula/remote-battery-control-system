@@ -76,7 +76,7 @@ A cloud service publishes daily battery schedules to edge devices (Raspberry Pi)
 ### Future Extensibility
 
 - **Versioning**: Schedule messages include version fields for protocol evolution
-- **Schema evolution**: JSON schemas support backward-compatible extensions
+- **Schema evolution**: JSON schemas support backward-compatible extensions (e.g., optional metadata fields for renewable energy tags or market signals)
 - **Protocol flexibility**: JSON can be replaced with Protobuf without changing component boundaries
 - **Clear boundaries**: Separation enables independent evolution of cloud and device logic
 
@@ -93,6 +93,18 @@ The Python examples in `cloud/` and `device/` demonstrate:
 - Message serialization
 - Basic MQTT patterns
 - Error handling approaches
+
+### Message Format Notes
+
+**Power and Mode Fields:**
+- `power_kw` is the **source of truth** for battery operation (positive=charge, negative=discharge, zero=idle)
+- Optional `mode` field exists for dashboard visualization and traceability only
+- Devices derive mode from `power_kw` sign; explicit `mode` is ignored during validation
+
+**Device-Specific Limits:**
+- Optional `max_power_kw` field enables device-specific edge validation
+- Devices reject schedules where `abs(power_kw) > max_power_kw` (or default limit if not specified)
+- Supports different device models with varying power capabilities
 
 ## What This Repository Is Not
 
