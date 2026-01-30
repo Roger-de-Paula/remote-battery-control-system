@@ -2,18 +2,18 @@
 
 ## Purpose
 
-This repository serves as a **companion implementation reference** for a system design exercise. It demonstrates the message schemas, component boundaries, and communication flows for a distributed battery control system that manages Allye MAX300 devices via MQTT.
+This repository is a companion implementation reference for a system design exercise.. It demonstrates the message schemas, component boundaries, and communication flows for a distributed battery control system that manages Allye MAX300 devices via MQTT.
 
-**This code is illustrative, not production-ready.** It exists to show implementation intent and support architectural discussions, not to be deployed as-is.
+**Note**: This code is illustrative and exists to show implementation intent and support architectural discussions.
 
 ## System Overview
 
-The system enables cloud-based control of edge battery devices:
+A cloud service publishes daily battery schedules to edge devices (Raspberry Pi) via MQTT. Each device subscribes to its own topic, validates and applies the schedule locally, then sends an acknowledgement back to the cloud. The system is designed to scale to 10,000+ devices while maintaining observability, traceability, and extensibility.
 
 - **Cloud Service**: Publishes daily battery schedules to devices
-- **Edge Devices** (Raspberry Pi): Subscribe to schedules, apply them locally, and send acknowledgements
-- **Scale Target**: Designed to support 10,000+ devices
-- **Core Design Goals**: Observability, traceability, and future extensibility
+- **Edge Devices**: Subscribe to schedules, apply them locally, and send acknowledgements
+- **Scale Target**: 10,000+ devices
+- **Design Goals**: Observability, traceability, and future extensibility
 
 ## Repository Structure
 
@@ -61,24 +61,24 @@ The system enables cloud-based control of edge battery devices:
 
 ### Observability
 
-- **Structured logging**: All messages include timestamps and trace IDs
-- **Acknowledgement tracking**: Cloud can correlate schedules with device responses
-- **Status reporting**: Devices report RECEIVED, APPLIED, or FAILED status
-- **Error context**: Failed operations include error reasons for debugging
+- **Structured logging**: Timestamps and trace IDs in all messages
+- **Acknowledgement tracking**: Cloud correlates schedules with device responses
+- **Status reporting**: RECEIVED, APPLIED, or FAILED status per device
+- **Error context**: Failed operations include error reasons
 
 ### Scalability
 
 - **Topic partitioning**: Device-specific topics enable horizontal scaling
-- **QoS levels**: Appropriate MQTT QoS ensures message delivery without overwhelming the broker
-- **Idempotency**: Schedule IDs allow safe retries and duplicate handling
-- **Stateless design**: Cloud and device components remain stateless where possible
+- **QoS levels**: Appropriate MQTT QoS for reliable delivery
+- **Idempotency**: Schedule IDs enable safe retries and duplicate handling
+- **Stateless design**: Components remain stateless where possible
 
 ### Future Extensibility
 
-- **Versioning**: Schedule messages include version fields to support protocol evolution
-- **Schema evolution**: JSON schemas can be extended with backward-compatible fields
-- **Protocol flexibility**: Current JSON implementation can be replaced with Protobuf or other formats without changing component boundaries
-- **Clear boundaries**: Separation between cloud and device logic enables independent evolution
+- **Versioning**: Schedule messages include version fields for protocol evolution
+- **Schema evolution**: JSON schemas support backward-compatible extensions
+- **Protocol flexibility**: JSON can be replaced with Protobuf without changing component boundaries
+- **Clear boundaries**: Separation enables independent evolution of cloud and device logic
 
 ## Usage
 
@@ -88,28 +88,24 @@ The JSON schemas in `schemas/` define the contract between cloud and device comp
 
 ### Running Examples
 
-The Python examples in `cloud/` and `device/` are illustrative only. They demonstrate:
+The Python examples in `cloud/` and `device/` demonstrate:
 - Topic naming conventions
 - Message serialization
 - Basic MQTT patterns
 - Error handling approaches
 
-**Note**: These scripts are not meant to be executed in production. They lack proper error handling, configuration management, and security measures required for real deployments.
-
 ## What This Repository Is Not
 
-- ❌ A production-ready codebase
-- ❌ A complete implementation
-- ❌ A deployment guide
-- ❌ A testing framework
+- ❌ Production-ready codebase
+- ❌ Complete implementation
+- ❌ Deployment guide
 
 ## What This Repository Is
 
-- ✅ An architectural reference
-- ✅ A schema definition
-- ✅ An illustration of component boundaries
-- ✅ A communication flow example
-- ✅ A design discussion tool
+- ✅ Architectural reference
+- ✅ Schema definitions
+- ✅ Component boundary illustration
+- ✅ Communication flow example
 
 ## Related Documentation
 
