@@ -116,7 +116,8 @@ def create_acknowledgement(
     error_reason: Optional[str] = None,
     max_power_kw_applied: Optional[float] = None,
     device_id: Optional[str] = None,
-    schedule_id: Optional[str] = None
+    schedule_id: Optional[str] = None,
+    applied_at: Optional[datetime] = None
 ) -> Dict[str, Any]:
     """
     Create an acknowledgement message to send back to cloud.
@@ -136,6 +137,7 @@ def create_acknowledgement(
         max_power_kw_applied: Power limit used for validation (for traceability)
         device_id: Device ID (fallback if schedule is incomplete)
         schedule_id: Schedule ID (fallback if schedule is incomplete)
+        applied_at: Timestamp when schedule was applied to hardware (for APPLIED status)
     """
     # Handle cases where schedule is incomplete (e.g., JSON parsing failure)
     ack_schedule_id = schedule_id or schedule.get("schedule_id", "unknown")
@@ -150,6 +152,10 @@ def create_acknowledgement(
     
     if status == "FAILED" and error_reason:
         ack["error_reason"] = error_reason
+    
+    # Include applied_at timestamp for APPLIED status (granular timing for latency analysis)
+    if status == "APPLIED" and applied_at:
+        ack["applied_at"] = applied_at.isoformat() + "Z"
     
     # Include max_power_kw_applied for traceability (helps cloud understand validation context)
     if max_power_kw_applied is not None:
@@ -257,13 +263,15 @@ def on_schedule_received(topic: str, payload: bytes, device_id: str) -> None:
     
     # Apply schedule to hardware
     try:
+        applied_at = datetime.utcnow()  # Capture timestamp before applying
         success = apply_schedule(schedule)
         
         if success:
             ack = create_acknowledgement(
                 schedule,
                 "APPLIED",
-                max_power_kw_applied=max_power_kw_applied
+                max_power_kw_applied=max_power_kw_applied,
+                applied_at=applied_at
             )
             # In production, use structured logging:
             # logger.info("schedule_applied", schedule_id=schedule['schedule_id'], max_power_kw=max_power_kw_applied)

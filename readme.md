@@ -28,8 +28,9 @@ A cloud service publishes daily battery schedules to edge devices (Raspberry Pi)
 │   └── ack.schema.json         # Device acknowledgement format
 ├── cloud/                       # Cloud-side examples
 │   └── publish_schedule.py     # Example schedule publisher
-└── device/                      # Device-side examples
-    └── mqtt_client.py          # Example MQTT subscriber
+├── device/                      # Device-side examples
+│   └── mqtt_client.py          # Example MQTT subscriber
+└── demo_end_to_end.py          # End-to-end workflow demonstration
 ```
 
 ## How It Works
@@ -93,6 +94,16 @@ The Python examples in `cloud/` and `device/` demonstrate:
 - Message serialization
 - Basic MQTT patterns
 - Error handling approaches
+
+**End-to-End Demo:**
+Run `python demo_end_to_end.py` to see the complete workflow:
+1. Cloud generates and publishes schedule
+2. Device receives and validates schedule
+3. Device applies schedule
+4. Device sends acknowledgement
+5. Cloud receives acknowledgement
+
+This demonstrates the full message flow in a single script.
 
 ### Message Format Notes
 
