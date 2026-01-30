@@ -12,7 +12,7 @@ configuration management, security, and production-grade MQTT client usage.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Tuple
 
 # In production, use a real MQTT client library (e.g., paho-mqtt)
@@ -96,6 +96,8 @@ def apply_schedule(schedule: Dict[str, Any]) -> bool:
     - Set power setpoints for each interval
     - Verify hardware acknowledges commands
     - Handle hardware errors gracefully
+    - Store schedule locally for independent execution
+    - Set up timer to execute intervals based on system time
     
     Returns: True if successful, False otherwise
     """
@@ -106,8 +108,166 @@ def apply_schedule(schedule: Dict[str, Any]) -> bool:
     # for interval in schedule['intervals']:
     #     battery_controller.set_power(interval['start_time'], interval['power_kw'])
     
+    # In production, also:
+    # - Store schedule to local database/file for persistence
+    # - Set up cron/scheduler to execute intervals at their start times
+    # - Execute intervals independently based on system time
+    
     print("[DEVICE] Schedule applied successfully (mock)")
+    print("[DEVICE] Schedule stored locally for independent execution")
     return True
+
+
+def create_execution_result(
+    schedule: Dict[str, Any],
+    interval: Dict[str, Any],
+    status: str,
+    actual_rate_kw: float,
+    error_reason: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Create an execution result message for a completed interval.
+    
+    This is called every 30 minutes at the end of each interval to report
+    the actual execution status back to the cloud.
+    
+    Args:
+        schedule: The schedule dict containing schedule_id and device_id
+        interval: The interval dict with start_time (and optionally end_time)
+        status: Execution status ("SUCCEED" or "FAIL")
+        actual_rate_kw: Actual power rate achieved during the interval
+        error_reason: Optional error message if status is FAIL
+    
+    Returns:
+        Execution result message dict
+    """
+    # Derive full ISO timestamps from schedule_id and interval start_time
+    schedule_date = schedule['schedule_id']  # e.g., "2025-12-25"
+    
+    # Parse interval start_time (HH:MM:SS format)
+    start_time_str = interval.get('start_time', '00:00:00')
+    start_iso = f"{schedule_date}T{start_time_str}Z"
+    
+    # Calculate end time (30 minutes later)
+    start_dt = datetime.fromisoformat(start_iso.replace('Z', '+00:00'))
+    end_dt = start_dt + timedelta(minutes=30)
+    end_iso = end_dt.isoformat().replace('+00:00', 'Z')
+    
+    result = {
+        "schedule_id": schedule['schedule_id'],
+        "device_id": schedule['device_id'],
+        "interval": {
+            "start": start_iso,
+            "end": end_iso
+        },
+        "status": status,
+        "actual_rate_kw": actual_rate_kw,
+        "timestamp": end_iso  # Report at end of interval
+    }
+    
+    if status == "FAIL" and error_reason:
+        result["error_reason"] = error_reason
+    
+    return result
+
+
+def publish_execution_result(result: Dict[str, Any], mqtt_client=None) -> None:
+    """
+    Publish execution result message to cloud.
+    
+    Topic naming: devices/{device_id}/execution
+    - Separate topic from schedules and acks for clear separation
+    - Enables cloud to subscribe to all execution results or device-specific
+    - Supports different QoS levels if needed
+    
+    QoS Level 1 (At least once):
+    - Ensures cloud receives execution results even during network issues
+    - Acceptable duplicates: cloud can deduplicate by (schedule_id, device_id, interval.start, timestamp)
+    - Critical for observability: cloud needs execution status for monitoring
+    
+    Reporting cadence:
+    - Devices publish execution results every 30 minutes at interval end
+    - Provides near-real-time visibility into battery operation
+    """
+    topic = f"devices/{result['device_id']}/execution"
+    payload = json.dumps(result, indent=None)
+    
+    print(f"[DEVICE] Publishing execution result to {topic}")
+    print(f"[DEVICE] Interval: {result['interval']['start']} → {result['interval']['end']}")
+    print(f"[DEVICE] Status: {result['status']}")
+    print(f"[DEVICE] Actual rate: {result['actual_rate_kw']} kW")
+    
+    # In production, use real MQTT client:
+    # mqtt_client.publish(topic, payload, qos=1, retain=False)
+    
+    # In production, also:
+    # - Log to local observability system
+    # - Handle publish failures (retry, local queue)
+    # - Use TLS for secure transport
+    # - Authenticate with broker credentials
+
+
+def execute_interval(schedule: Dict[str, Any], interval: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Execute a single interval from the schedule.
+    
+    This function is called every 30 minutes by the device's local scheduler
+    to execute the next interval in the schedule.
+    
+    In production, this would:
+    - Read the current interval from locally stored schedule
+    - Send command to battery controller
+    - Monitor execution during the 30-minute interval
+    - Measure actual power rate achieved
+    - Detect any errors or failures
+    - Report execution result at interval end
+    
+    Args:
+        schedule: The schedule dict
+        interval: The interval dict to execute
+    
+    Returns:
+        Execution result message dict
+    """
+    scheduled_rate_kw = interval.get('power_kw', 0.0)
+    
+    print(f"[DEVICE] Executing interval: {interval.get('start_time', 'unknown')}")
+    print(f"[DEVICE] Scheduled rate: {scheduled_rate_kw} kW")
+    
+    # Mock execution: In production, this would:
+    # - Send command to battery controller
+    # - Monitor execution for 30 minutes
+    # - Measure actual power rate
+    # - Detect failures
+    
+    # Simulate execution (mock)
+    import random
+    # Simulate slight variation in actual rate (±5%)
+    variation = random.uniform(-0.05, 0.05)
+    actual_rate_kw = scheduled_rate_kw * (1 + variation)
+    
+    # Simulate occasional failures (5% failure rate in mock)
+    if random.random() < 0.05:
+        status = "FAIL"
+        error_reason = "Hardware communication timeout (mock)"
+        actual_rate_kw = 0.0
+    else:
+        status = "SUCCEED"
+        error_reason = None
+    
+    print(f"[DEVICE] Execution complete: {status}")
+    print(f"[DEVICE] Actual rate: {actual_rate_kw:.2f} kW")
+    
+    # Create and return execution result
+    result = create_execution_result(
+        schedule,
+        interval,
+        status,
+        actual_rate_kw,
+        error_reason
+    )
+    
+    return result
 
 
 def create_acknowledgement(

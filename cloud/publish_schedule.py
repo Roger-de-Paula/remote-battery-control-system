@@ -26,6 +26,9 @@ from typing import Dict, Any
 # import jsonschema
 # from schemas.schedule import schedule_schema
 
+# In production, subscribe to execution results
+# from paho.mqtt import client as mqtt_client
+
 
 def get_device_capabilities(device_id: str) -> Dict[str, Any]:
     """
@@ -217,6 +220,87 @@ def main():
     
     if not success:
         print("[CLOUD] Failed to publish schedule")
+
+
+def on_execution_result_received(topic: str, payload: bytes) -> None:
+    """
+    Handle incoming execution result message from device.
+    
+    Execution results are published every 30 minutes by devices
+    reporting the actual execution status of each interval.
+    
+    In production, this would:
+    - Parse execution result JSON
+    - Validate against execution_result schema
+    - Store in database for analytics
+    - Update device status metrics
+    - Trigger alerts if status is FAIL
+    - Compare actual_rate_kw vs scheduled rate_kw for optimization
+    """
+    try:
+        result = json.loads(payload.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        print(f"[CLOUD] ERROR: Failed to parse execution result: {e}")
+        return
+    
+    schedule_id = result.get('schedule_id', 'unknown')
+    device_id = result.get('device_id', 'unknown')
+    status = result.get('status', 'unknown')
+    actual_rate_kw = result.get('actual_rate_kw', 0)
+    interval = result.get('interval', {})
+    
+    print(f"[CLOUD] Received execution result from {device_id}")
+    print(f"[CLOUD] Schedule: {schedule_id}")
+    print(f"[CLOUD] Interval: {interval.get('start', 'unknown')} → {interval.get('end', 'unknown')}")
+    print(f"[CLOUD] Status: {status}")
+    print(f"[CLOUD] Actual rate: {actual_rate_kw} kW")
+    
+    if status == "FAIL":
+        error_reason = result.get('error_reason', 'Unknown error')
+        print(f"[CLOUD] ERROR: {error_reason}")
+        # In production, trigger alert/notification
+    
+    # In production, also:
+    # - Store in database: execution_results table
+    # - Update metrics: success rate, average actual_rate_kw
+    # - Compare with scheduled rate for optimization insights
+    # - Log to observability system
+
+
+def subscribe_to_execution_results(device_id: Optional[str] = None, mqtt_client=None) -> None:
+    """
+    Subscribe to execution result messages from devices.
+    
+    Topic: devices/{device_id}/execution (device-specific)
+    or: devices/+/execution (all devices)
+    
+    Execution results are published every 30 minutes at the end of each interval,
+    providing near-real-time visibility into battery operation.
+    
+    In production, this would:
+    - Subscribe to execution result topics
+    - Process results asynchronously
+    - Aggregate metrics for monitoring dashboards
+    - Trigger alerts on failures
+    """
+    if device_id:
+        topic = f"devices/{device_id}/execution"
+    else:
+        topic = "devices/+/execution"  # Subscribe to all devices
+    
+    print(f"[CLOUD] Subscribing to execution results: {topic}")
+    
+    # In production, use real MQTT client:
+    # mqtt_client.subscribe(topic, qos=1)
+    # mqtt_client.on_message = lambda client, userdata, msg: on_execution_result_received(
+    #     msg.topic, msg.payload
+    # )
+    
+    # In production, also:
+    # - Handle subscription failures
+    # - Monitor subscription status
+    # - Use TLS for secure transport
+    # - Authenticate with broker credentials
 
 
 if __name__ == "__main__":

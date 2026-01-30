@@ -17,13 +17,22 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 
 # Import cloud and device functions
-from cloud.publish_schedule import generate_schedule, publish_schedule, get_device_capabilities
+from cloud.publish_schedule import (
+    generate_schedule,
+    publish_schedule,
+    get_device_capabilities,
+    on_execution_result_received,
+    subscribe_to_execution_results
+)
 from device.mqtt_client import (
     validate_schedule,
     apply_schedule,
     create_acknowledgement,
     publish_acknowledgement,
-    on_schedule_received
+    on_schedule_received,
+    execute_interval,
+    create_execution_result,
+    publish_execution_result
 )
 
 # Mock MQTT broker for simulating async message flow

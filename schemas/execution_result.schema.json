@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/remote-battery-control-system/schemas/execution_result.schema.json",
+  "title": "Interval Execution Result Message",
+  "description": "Schema for per-interval execution result messages published by edge devices every 30 minutes. Reports actual battery operation status for each schedule interval.",
+  "type": "object",
+  "required": ["schedule_id", "device_id", "interval", "status", "actual_rate_kw", "timestamp"],
+  "properties": {
+    "schedule_id": {
+      "type": "string",
+      "description": "The schedule_id from the executed schedule. Enables cloud to correlate execution results with the original schedule for traceability.",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "examples": ["2025-12-25", "2025-12-25-device-001"]
+    },
+    "device_id": {
+      "type": "string",
+      "description": "Device identifier. Used for topic routing and cloud-side aggregation. Enables per-device execution monitoring and debugging.",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "examples": ["device-001", "max300-123"]
+    },
+    "interval": {
+      "type": "object",
+      "description": "The time interval that was executed. Matches the interval from the schedule message.",
+      "required": ["start", "end"],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp for the start of the executed interval. Matches the interval start time from the schedule.",
+          "examples": ["2025-12-25T00:00:00Z", "2025-12-25T12:30:00Z"]
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp for the end of the executed interval. Typically start + 30 minutes for half-hour intervals.",
+          "examples": ["2025-12-25T00:30:00Z", "2025-12-25T13:00:00Z"]
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["SUCCEED", "FAIL"],
+      "description": "Execution status for this interval. SUCCEED: interval executed successfully at the requested rate. FAIL: interval execution failed (see error_reason if provided).",
+      "examples": ["SUCCEED", "FAIL"]
+    },
+    "actual_rate_kw": {
+      "type": "number",
+      "description": "Actual power rate in kilowatts achieved during this interval. Positive values indicate charging, negative values indicate discharging. May differ slightly from scheduled rate_kw due to hardware limitations or grid conditions.",
+      "examples": [100, -50, 10.5, 0.0]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when this execution result was generated. Typically at the end of the interval (interval.end). Used for latency tracking and execution timeline analysis.",
+      "examples": ["2025-12-25T00:30:00Z", "2025-12-25T13:00:00Z"]
+    },
+    "error_reason": {
+      "type": "string",
+      "description": "Optional error message when status is FAIL. Provides context for execution failures: hardware errors, communication issues, grid conditions, etc. Only present when status=FAIL.",
+      "maxLength": 256,
+      "examples": [
+        "Hardware communication timeout",
+        "Battery state of charge limit reached",
+        "Grid connection lost",
+        "Overcurrent protection triggered"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "comments": {
+    "design_decisions": [
+      "Per-interval reporting enables granular observability: cloud can track execution success/failure for each 30-minute slot",
+      "actual_rate_kw reports real-world performance, enabling comparison with scheduled rate_kw for optimization",
+      "interval.start and interval.end use full ISO timestamps matching PDF specification for clarity",
+      "status enum (SUCCEED/FAIL) matches PDF specification exactly",
+      "timestamp at interval end enables precise execution timeline tracking",
+      "error_reason provides actionable context when intervals fail",
+      "additionalProperties: false ensures strict validation and prevents accidental field additions"
+    ],
+    "observability_support": [
+      "Granular tracking: per-interval status enables identification of specific time slots with execution issues",
+      "Performance analysis: actual_rate_kw vs scheduled rate_kw comparison enables optimization",
+      "Timeline reconstruction: interval timestamps enable full execution timeline reconstruction",
+      "Failure pattern detection: cloud can identify patterns in failed intervals (time-of-day, device-specific, etc.)",
+      "Device health: aggregation of execution results enables device health monitoring"
+    ],
+    "reporting_cadence": [
+      "Devices report execution results every 30 minutes at the end of each interval",
+      "This provides near-real-time visibility into battery operation",
+      "Cloud can detect execution failures quickly and take corrective action"
+    ]
+  }
+}
+
